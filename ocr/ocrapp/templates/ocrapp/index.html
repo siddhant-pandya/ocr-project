@@ -6,6 +6,31 @@
     <title>OCR App</title>
 </head>
 <body>
-    Hello
+    <h1>
+        OCR Project
+    </h1>
+
+    <h3>
+        Upload Image -> We'll process it -> Get text output
+    </h3>
+
+    {% load static %}
+
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <input type="file" name="myfile">
+        <button type="submit">Upload</button>
+      </form>
+    
+      {% if uploaded_file_url %}
+        <p>
+            <img src="{{ uploaded_file_url }}"> 
+        </p>
+        <p>
+            {{ txt }}
+        </p>
+      {% endif %}
+    
 </body>
 </html>
