@@ -1,140 +1,88 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 import csv
-import cv2
-import pytesseract
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
+from django.templatetags.static import static
+from django.contrib.staticfiles.finders import find
+
+
+import os
+import fnmatch
+import cv2
 import numpy as np
+import string
+import time
+import tensorflow as tf
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-def pre_processing(image):
-    """
-    This function take one argument as
-    input. this function will convert
-    input image to binary image
-    :param image: image
-    :return: thresholded image
-    """
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # converting it to binary image
-    threshold_img = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    # saving image to view threshold image
-    cv2.imwrite('thresholded.png', threshold_img)
-
-    #cv2.imshow('threshold image', threshold_img)
-    # Maintain output window until
-    # user presses a key
-    cv2.waitKey(0)
-    # Destroying present windows on screen
-    #cv2.destroyAllWindows()
-
-    return threshold_img
+from tensorflow.keras.layers import Dense, LSTM, Reshape, BatchNormalization, Input, Conv2D, MaxPool2D, Lambda, Bidirectional
+from tensorflow.keras.models import Model
+from tensorflow.keras.activations import relu, sigmoid, softmax
+import tensorflow.keras.backend as K
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.callbacks import ModelCheckpoint
+from keras.models import model_from_json
 
 
-def parse_text(threshold_img):
-    """
-    This function take one argument as
-    input. this function will feed input
-    image to tesseract to predict text.
-    :param threshold_img: image
-    return: meta-data dictionary
-    """
-    # configuring parameters for tesseract
-    tesseract_config = r'--oem 3 --psm 6'
-    # now feeding image to tesseract
-    details = pytesseract.image_to_data(threshold_img, output_type=pytesseract.Output.DICT,
-                                        config=tesseract_config, lang='eng')
-    return details
-
-
-def draw_boxes(image, details, threshold_point):
-    """
-    This function takes three argument as
-    input. it draw boxes on text area detected
-    by Tesseract. it also writes resulted image to
-    your local disk so that you can view it.
-    :param image: image
-    :param details: dictionary
-    :param threshold_point: integer
-    :return: None
-    """
-    total_boxes = len(details['text'])
-    for sequence_number in range(total_boxes):
-        if int(details['conf'][sequence_number]) > threshold_point:
-            (x, y, w, h) = (details['left'][sequence_number], details['top'][sequence_number],
-                            details['width'][sequence_number], details['height'][sequence_number])
-            image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    # saving image to local
+def func(image):
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)   
+    #img = cv2.cvtColor(cv2.imread(image), cv2.COLOR_BGR2GRAY)   
+    w, h = img.shape
+    if h > 128 or w > 32:
+        c = 0
+    else:
+        if w < 32:
+            add_zeros = np.ones((32-w, h))*255
+            img = np.concatenate((img, add_zeros))
+        if h < 128:
+            add_zeros = np.ones((32, 128-h))*255
+            img = np.concatenate((img, add_zeros), axis=1)
+    img = np.expand_dims(img , axis = 2)
+    img = img/255.
+    img = np.array(img)
+    predict_img  = []
+    predict_img.append(img)
+    predict_img = np.array(predict_img)
     
-    #cv2.imwrite('captured_text_area.png', image)
+    json_file = open('static/ocrapp/model.json', 'r')
     
-    # display image
-    #cv2.imshow('captured text', image)
-    # Maintain output window until user presses a key
-    #cv2.waitKey(0)
-    # Destroying present windows on screen
-    #cv2.destroyAllWindows()
+    loaded_model_json = json_file.read()
+    #print(loaded_model_json)
+    json_file.close()
+    
+    loaded_model = model_from_json(loaded_model_json)
 
-
-def format_text(details):
-    """
-    This function take one argument as
-    input.This function will arrange
-    resulted text into proper format.
-    :param details: dictionary
-    :return: list
-    """
-    parse_text = []
-    word_list = []
-    last_word = ''
-    for word in details['text']:
-        if word != '':
-            word_list.append(word)
-            last_word = word
-        if (last_word != '' and word == '') or (word == details['text'][-1]):
-            parse_text.append(word_list)
-            word_list = []
-
-    return parse_text
-
-
-def write_text(formatted_text):
-    """
-    This function take one argument.
-    it will write arranged text into
-    a file.
-    :param formatted_text: list
-    :return: None
-    """
-    with open('resulted_text.txt', 'w', newline="") as file:
-        csv.writer(file, delimiter=" ").writerows(formatted_text)
-
+    loaded_model.load_weights("static/ocrapp/best_model.hdf5")
+    
+    prediction = loaded_model.predict(predict_img[:1])
+    out = K.get_value(K.ctc_decode(prediction, input_length=np.ones(prediction.shape[0])*prediction.shape[1],
+                         greedy=True)[0][0])
+    char_list = string.ascii_letters+string.digits
+    i = 0
+    for x in out:
+        print("predicted text = ", end = '')
+        for ps in x:  
+            if int(ps) != -1:
+                print(char_list[int(ps)], end = '')  
+        i+=1
 
 # Create your views here.
 def index(request):
     if request.method == 'POST' and request.FILES['myfile']:
         myfile = request.FILES['myfile']
-        fs = FileSystemStorage()
-        filename = fs.save(myfile.name, myfile)
-        uploaded_file_url = fs.url(filename)
+        #fs = FileSystemStorage()
+        #filename = fs.save(myfile.name, myfile)
+        #uploaded_file_url = fs.url(filename)
+        img = cv2.imdecode(np.fromstring(request.FILES['myfile'].read(), np.uint8), cv2.IMREAD_UNCHANGED)
+        print(img)
+        func(img)
 
-        #image = cv2.imread(uploaded_file_url)
+        
 
-        image = cv2.imread(myfile,1)
-
-        thresholds_image = pre_processing(image)
-    
-        parsed_data = parse_text(thresholds_image)
-    
-        accuracy_threshold = 30
-    
-        #draw_boxes(thresholds_image, parsed_data, accuracy_threshold)
-
-        arranged_text = format_text(parsed_data)
-
-        return render(request, 'ocrapp/index.html', {
-            'uploaded_file_url': uploaded_file_url, 'txt': arranged_text
-        })
+        # return render(request, 'ocrapp/index.html', {
+        #     'uploaded_file_url': uploaded_file_url, 'txt': arranged_text
+        # })
 
     context = {}
     return render(request, 'ocrapp/index.html', context)
