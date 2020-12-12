@@ -22,7 +22,10 @@ from tensorflow.keras.activations import relu, sigmoid, softmax
 import tensorflow.keras.backend as K
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.callbacks import ModelCheckpoint
-from keras.models import model_from_json
+#from keras.models import model_from_json
+from tensorflow.keras.models import model_from_json
+import marshal
+from tensorflow import keras
 
 
 def func(image):
@@ -52,6 +55,7 @@ def func(image):
     json_file.close()
     
     loaded_model = model_from_json(loaded_model_json)
+    #loaded_model = keras.models.model_from_json(loaded_model_json)
 
     loaded_model.load_weights("static/ocrapp/best_model.hdf5")
     
