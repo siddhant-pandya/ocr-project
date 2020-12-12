@@ -60,29 +60,29 @@ def func(image):
                          greedy=True)[0][0])
     char_list = string.ascii_letters+string.digits
     i = 0
+    s = ""
     for x in out:
-        print("predicted text = ", end = '')
         for ps in x:  
             if int(ps) != -1:
-                print(char_list[int(ps)], end = '')  
+                s +=(char_list[int(ps)])  
         i+=1
+    return s
 
 # Create your views here.
 def index(request):
+    s=""
     if request.method == 'POST' and request.FILES['myfile']:
         myfile = request.FILES['myfile']
         #fs = FileSystemStorage()
         #filename = fs.save(myfile.name, myfile)
         #uploaded_file_url = fs.url(filename)
         img = cv2.imdecode(np.fromstring(request.FILES['myfile'].read(), np.uint8), cv2.IMREAD_UNCHANGED)
-        print(img)
-        func(img)
-
+        s = func(img)
         
 
         # return render(request, 'ocrapp/index.html', {
         #     'uploaded_file_url': uploaded_file_url, 'txt': arranged_text
         # })
 
-    context = {}
+    context = {'txt':s}
     return render(request, 'ocrapp/index.html', context)
