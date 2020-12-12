@@ -71,18 +71,21 @@ def func(image):
 # Create your views here.
 def index(request):
     s=""
+    context={}
     if request.method == 'POST' and request.FILES['myfile']:
         myfile = request.FILES['myfile']
-        #fs = FileSystemStorage()
-        #filename = fs.save(myfile.name, myfile)
-        #uploaded_file_url = fs.url(filename)
+        
         img = cv2.imdecode(np.fromstring(request.FILES['myfile'].read(), np.uint8), cv2.IMREAD_UNCHANGED)
         s = func(img)
         
+        fs = FileSystemStorage()
+        filename = fs.save(myfile.name, myfile)
+        uploaded_file_url = fs.url(filename)
+        
+        context = {'txt':s, 'img':uploaded_file_url}
 
         # return render(request, 'ocrapp/index.html', {
         #     'uploaded_file_url': uploaded_file_url, 'txt': arranged_text
         # })
 
-    context = {'txt':s}
     return render(request, 'ocrapp/index.html', context)
